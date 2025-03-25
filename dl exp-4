@@ -1,0 +1,155 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyNTaqUMqiveEL/LNIkoP8qY",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/DevanshYadav159/Deep-Learning/blob/main/dl%20exp-4\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import torch\n",
+        "import torch.nn as nn\n",
+        "import torch.optim as optim\n",
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "from torch.utils.data import DataLoader, Dataset\n",
+        "from collections import Counter\n",
+        "from google.colab import files\n",
+        "import os\n",
+        "\n",
+        "# Check if dataset exists, otherwise create a sample dataset\n",
+        "file_path = \"poems-100.csv\"\n",
+        "if not os.path.exists(file_path):\n",
+        "    data = {\"text\": [\"Roses are red\", \"Violets are blue\", \"Sugar is sweet\", \"And so are you\"]}\n",
+        "    df = pd.DataFrame(data)\n",
+        "    df.to_csv(file_path, index=False)\n",
+        "    print(\"Sample dataset created: poems-100.csv\")\n",
+        "else:\n",
+        "    df = pd.read_csv(file_path)\n",
+        "\n",
+        "text = \" \".join(df[\"text\"].astype(str).tolist()).lower()\n",
+        "words = text.split()\n",
+        "\n",
+        "# Vocabulary creation\n",
+        "vocab = list(set(words))\n",
+        "word_to_idx = {word: i for i, word in enumerate(vocab)}\n",
+        "idx_to_word = {i: word for word, i in word_to_idx.items()}\n",
+        "\n",
+        "# One-Hot Encoding Function\n",
+        "def one_hot_encode(sequence, vocab_size):\n",
+        "    encoded = np.zeros((len(sequence), vocab_size), dtype=np.float32)\n",
+        "    for i, idx in enumerate(sequence):\n",
+        "        encoded[i, idx] = 1.0\n",
+        "    return encoded\n",
+        "\n",
+        "# Dataset Preparation\n",
+        "class PoetryDataset(Dataset):\n",
+        "    def __init__(self, words, word_to_idx, context_size=5):\n",
+        "        self.context_size = context_size\n",
+        "        self.data = []\n",
+        "        for i in range(len(words) - context_size):\n",
+        "            self.data.append((words[i:i+context_size], words[i+context_size]))\n",
+        "\n",
+        "    def __len__(self):\n",
+        "        return len(self.data)\n",
+        "\n",
+        "    def __getitem__(self, index):\n",
+        "        context, target = self.data[index]\n",
+        "        context_idxs = [word_to_idx[word] for word in context]\n",
+        "        target_idx = word_to_idx[target]\n",
+        "        return torch.tensor(context_idxs, dtype=torch.long), torch.tensor(target_idx, dtype=torch.long)\n",
+        "\n",
+        "# Model Definition\n",
+        "class RNNModel(nn.Module):\n",
+        "    def __init__(self, vocab_size, embedding_dim, hidden_dim):\n",
+        "        super(RNNModel, self).__init__()\n",
+        "        self.embedding = nn.Embedding(vocab_size, embedding_dim)\n",
+        "        self.rnn = nn.RNN(embedding_dim, hidden_dim, batch_first=True)\n",
+        "        self.fc = nn.Linear(hidden_dim, vocab_size)\n",
+        "\n",
+        "    def forward(self, x):\n",
+        "        x = self.embedding(x)\n",
+        "        out, _ = self.rnn(x)\n",
+        "        out = self.fc(out[:, -1, :])\n",
+        "        return out\n",
+        "\n",
+        "# Training Function\n",
+        "def train_model(model, dataset, epochs=10, lr=0.01):\n",
+        "    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)\n",
+        "    criterion = nn.CrossEntropyLoss()\n",
+        "    optimizer = optim.Adam(model.parameters(), lr=lr)\n",
+        "\n",
+        "    for epoch in range(epochs):\n",
+        "        total_loss = 0\n",
+        "        for inputs, targets in dataloader:\n",
+        "            optimizer.zero_grad()\n",
+        "            outputs = model(inputs)\n",
+        "            loss = criterion(outputs, targets)\n",
+        "            loss.backward()\n",
+        "            optimizer.step()\n",
+        "            total_loss += loss.item()\n",
+        "        print(f\"Epoch {epoch+1}, Loss: {total_loss/len(dataloader)}\")\n",
+        "\n",
+        "# Prepare dataset\n",
+        "dataset = PoetryDataset(words, word_to_idx)\n",
+        "\n",
+        "# Train One-Hot Model\n",
+        "vocab_size = len(vocab)\n",
+        "embedding_dim = 50\n",
+        "hidden_dim = 128\n",
+        "model = RNNModel(vocab_size, embedding_dim, hidden_dim)\n",
+        "train_model(model, dataset)\n",
+        "\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "3h4Q2S1GwRLk",
+        "outputId": "11bf8681-0b4f-4924-87a8-5f7d00b5a182"
+      },
+      "execution_count": 7,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Sample dataset created: poems-100.csv\n",
+            "Epoch 1, Loss: 2.356328248977661\n",
+            "Epoch 2, Loss: 0.8793014287948608\n",
+            "Epoch 3, Loss: 0.24564507603645325\n",
+            "Epoch 4, Loss: 0.06562452018260956\n",
+            "Epoch 5, Loss: 0.02176516503095627\n",
+            "Epoch 6, Loss: 0.008976202458143234\n",
+            "Epoch 7, Loss: 0.004353254102170467\n",
+            "Epoch 8, Loss: 0.0023761694319546223\n",
+            "Epoch 9, Loss: 0.0014178863493725657\n",
+            "Epoch 10, Loss: 0.000907164765521884\n"
+          ]
+        }
+      ]
+    }
+  ]
+}
